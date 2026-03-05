@@ -5,3 +5,12 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pth
+smartmine/ai-model/uploads/
+smartmine/backend/uploads/
+venv/
+.venv/
