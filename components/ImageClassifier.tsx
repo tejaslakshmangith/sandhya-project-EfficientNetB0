@@ -1,9 +1,25 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import { predictImage, PredictionResult } from "@/lib/ai";
+import { useState, useRef, useCallback, useEffect } from "react";
+import {
+  predictImage,
+  fetchHistory,
+  fetchStats,
+  deletePrediction,
+  PredictionResult,
+  HistoryItem,
+  Stats,
+} from "@/lib/ai";
 
 type Status = "idle" | "loading" | "success" | "error";
+
+function relativeTime(iso: string): string {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
 
 export default function ImageClassifier() {
   const [preview, setPreview] = useState<string | null>(null);
@@ -13,33 +29,61 @@ export default function ImageClassifier() {
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = useCallback(async (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      setErrorMsg("Please upload a valid image file (JPG, PNG, WebP).");
-      setStatus("error");
-      return;
-    }
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string>("");
+  const [deleteError, setDeleteError] = useState<string>("");
+  const [stats, setStats] = useState<Stats | null>(null);
 
-    // Show preview
-    const reader = new FileReader();
-    reader.onload = (e) => setPreview(e.target?.result as string);
-    reader.readAsDataURL(file);
-
-    // Run inference
-    setStatus("loading");
-    setResult(null);
-    setErrorMsg("");
-
+  const refreshHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError("");
     try {
-      const prediction = await predictImage(file);
-      setResult(prediction);
-      setStatus("success");
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      setErrorMsg(msg);
-      setStatus("error");
+      const [h, s] = await Promise.all([fetchHistory(20), fetchStats()]);
+      setHistory(h);
+      setStats(s);
+    } catch {
+      setHistoryError("History unavailable — make sure the Flask backend is running on localhost:5000.");
+    } finally {
+      setHistoryLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    refreshHistory();
+  }, [refreshHistory]);
+
+  const handleFile = useCallback(
+    async (file: File) => {
+      if (!file.type.startsWith("image/")) {
+        setErrorMsg("Please upload a valid image file (JPG, PNG, WebP).");
+        setStatus("error");
+        return;
+      }
+
+      // Show preview
+      const reader = new FileReader();
+      reader.onload = (e) => setPreview(e.target?.result as string);
+      reader.readAsDataURL(file);
+
+      // Run inference
+      setStatus("loading");
+      setResult(null);
+      setErrorMsg("");
+
+      try {
+        const prediction = await predictImage(file);
+        setResult(prediction);
+        setStatus("success");
+        await refreshHistory();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        setErrorMsg(msg);
+        setStatus("error");
+      }
+    },
+    [refreshHistory]
+  );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -66,6 +110,16 @@ export default function ImageClassifier() {
     setStatus("idle");
     setErrorMsg("");
     if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const handleDelete = async (id: number) => {
+    setDeleteError("");
+    try {
+      await deletePrediction(id);
+      await refreshHistory();
+    } catch {
+      setDeleteError("Failed to delete prediction. Please try again.");
+    }
   };
 
   const isSafe = result?.class === "safe";
@@ -191,8 +245,8 @@ export default function ImageClassifier() {
           <p className="text-orange-400 font-semibold">⚠️ Error</p>
           <p className="text-gray-400 text-sm">{errorMsg}</p>
           <p className="text-gray-500 text-xs">
-            Make sure the FastAPI backend is running on{" "}
-            <code className="text-gray-400">localhost:8000</code>
+            Make sure the Flask backend is running on{" "}
+            <code className="text-gray-400">localhost:5000</code>
           </p>
           <button
             onClick={reset}
@@ -202,6 +256,68 @@ export default function ImageClassifier() {
           </button>
         </div>
       )}
+
+      {/* Stats Bar */}
+      {stats && (
+        <div className="rounded-xl bg-gray-900/60 border border-gray-800 px-4 py-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
+          <span>Total: <span className="text-white font-semibold">{stats.total}</span></span>
+          <span>Safe: <span className="text-green-400 font-semibold">{stats.safe}</span></span>
+          <span>Unsafe: <span className="text-red-400 font-semibold">{stats.unsafe}</span></span>
+          <span>Avg confidence: <span className="text-white font-semibold">{(stats.avg_confidence * 100).toFixed(1)}%</span></span>
+          <span>Today: <span className="text-blue-400 font-semibold">{stats.today}</span></span>
+        </div>
+      )}
+
+      {/* History Panel */}
+      <div className="rounded-2xl border border-gray-800 bg-gray-900/40">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+          <h2 className="text-sm font-semibold text-gray-300">
+            History
+            {history.length > 0 && (
+              <span className="ml-2 text-xs text-gray-500 font-normal">({history.length})</span>
+            )}
+          </h2>
+          <button
+            onClick={refreshHistory}
+            className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            aria-label="Refresh history"
+          >
+            ↻ Refresh
+          </button>
+        </div>
+
+        {historyLoading ? (
+          <div className="py-6 text-center text-gray-500 text-sm">Loading…</div>
+        ) : historyError ? (
+          <div className="py-4 px-4 text-center text-orange-400 text-xs">{historyError}</div>
+        ) : history.length === 0 ? (
+          <div className="py-6 text-center text-gray-600 text-sm">No predictions yet</div>
+        ) : (
+          <ul className="divide-y divide-gray-800 max-h-72 overflow-y-auto">
+            {deleteError && (
+              <li className="px-4 py-2 text-xs text-red-400">{deleteError}</li>
+            )}
+            {history.map((item) => (
+              <li key={item.id} className="flex items-center gap-3 px-4 py-2.5">
+                <span className="text-lg shrink-0">{item.class === "safe" ? "🟢" : "🔴"}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-300 truncate">{item.filename || "unknown"}</p>
+                  <p className="text-xs text-gray-500">
+                    {(item.confidence * 100).toFixed(1)}% · {relativeTime(item.timestamp)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleDelete(item.id)}
+                  className="text-gray-600 hover:text-red-400 transition-colors text-sm leading-none shrink-0"
+                  aria-label="Delete prediction"
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

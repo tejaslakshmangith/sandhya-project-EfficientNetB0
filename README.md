@@ -9,13 +9,13 @@ AI-powered mining safety image classifier. Upload a mining-site image and get an
 ```
 User uploads image
        ↓
-Next.js 15 Frontend  (port 3000)
+Next.js 15 Frontend (port 3000)
        ↓
-FastAPI Backend      (port 8000)
+Flask Backend + SQLite DB (port 5000)   ← stores user data & results
        ↓
-EfficientNetB0 Model (~5M params)
+FastAPI / EfficientNetB0 (port 8000)    ← AI inference engine
        ↓
-JSON: { class, confidence }
+JSON: { class, confidence, prediction_id, session_id, timestamp }
 ```
 
 ---
@@ -29,9 +29,9 @@ JSON: { class, confidence }
 │   ├── page.tsx
 │   └── globals.css
 ├── components/
-│   └── ImageClassifier.tsx     # Upload + inference UI
+│   └── ImageClassifier.tsx     # Upload + inference UI + History panel
 ├── lib/
-│   └── ai.ts                   # fetch wrapper for FastAPI
+│   └── ai.ts                   # fetch wrapper for Flask backend
 ├── smartmine/
 │   ├── ai-model/
 │   │   ├── models/
@@ -41,6 +41,10 @@ JSON: { class, confidence }
 │   │   └── inference_efficientnet.py
 │   ├── backend/
 │   │   └── api_efficientnet.py
+│   ├── flask_backend/
+│   │   ├── app.py              # Flask app — DB layer & inference proxy
+│   │   ├── requirements.txt
+│   │   └── smartmine.db        # SQLite database (auto-created)
 │   └── requirements.txt
 ```
 
@@ -82,7 +86,16 @@ cd smartmine/backend
 uvicorn api_efficientnet:app --reload --port 8000
 ```
 
-### 5. Start the Next.js frontend
+### 5. Start the Flask backend
+
+```bash
+cd smartmine/flask_backend
+pip install -r requirements.txt
+python app.py
+# Runs on http://localhost:5000
+```
+
+### 6. Start the Next.js frontend
 
 ```bash
 npm install
