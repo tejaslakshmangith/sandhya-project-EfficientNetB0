@@ -1,6 +1,6 @@
-# SmartMine — EfficientNetB0 Safety Classifier
+# SmartMine Ops — EfficientNetB0 Mineral/Rock/Ore Classifier
 
-AI-powered mining safety image classifier. Upload a mining-site image and get an instant **safe / unsafe** prediction powered by **EfficientNetB0**.
+AI-powered mining image classifier. Upload a mining-site image and get an instant **mineral / rock / ore** prediction powered by **EfficientNetB0**.
 
 ---
 
@@ -36,7 +36,18 @@ JSON: { class, confidence, prediction_id, session_id, timestamp }
 │   ├── ai-model/
 │   │   ├── models/
 │   │   │   └── efficientnet_model.py
-│   │   ├── dataset/            # place train/val images here
+│   │   ├── data/               # primary dataset folder (mineral/rock/ore)
+│   │   │   ├── README.md
+│   │   │   ├── download_datasets.py
+│   │   │   ├── train/
+│   │   │   │   ├── mineral/
+│   │   │   │   ├── rock/
+│   │   │   │   └── ore/
+│   │   │   └── val/
+│   │   │       ├── mineral/
+│   │   │       ├── rock/
+│   │   │       └── ore/
+│   │   ├── dataset/            # legacy safe/unsafe folder (not used)
 │   │   ├── train_efficientnet.py
 │   │   └── inference_efficientnet.py
 │   ├── backend/
@@ -61,15 +72,18 @@ pip install -r requirements.txt
 
 ### 2. Prepare your dataset
 
+Download and organise the mineral/rock/ore datasets using the provided script:
+
+```bash
+cd smartmine/ai-model/data
+python download_datasets.py
 ```
-smartmine/ai-model/dataset/
-├── train/
-│   ├── safe/
-│   └── unsafe/
-└── val/
-    ├── safe/
-    └── unsafe/
-```
+
+This downloads the following Kaggle datasets (requires a valid `~/.kaggle/kaggle.json` API key):
+- **Mineral Photos** — https://www.kaggle.com/datasets/floriangeillon/mineral-photos → `mineral` class
+- **Rock Classification** — https://www.kaggle.com/datasets/salmaneunus/rock-classification → `rock` and `ore` classes
+
+See `smartmine/ai-model/data/README.md` for detailed setup instructions.
 
 ### 3. Train the model
 
@@ -77,6 +91,7 @@ smartmine/ai-model/dataset/
 cd smartmine/ai-model
 python train_efficientnet.py
 # Saves: models/efficientnet_smartmine.pth
+#        models/class_names.json
 ```
 
 ### 4. Start the FastAPI backend

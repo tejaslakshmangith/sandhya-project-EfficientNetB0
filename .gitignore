@@ -14,3 +14,18 @@ smartmine/ai-model/uploads/
 smartmine/backend/uploads/
 venv/
 .venv/
+
+# Dataset images — use smartmine/ai-model/data/download_datasets.py to populate
+smartmine/ai-model/data/train/mineral/*
+smartmine/ai-model/data/train/rock/*
+smartmine/ai-model/data/train/ore/*
+smartmine/ai-model/data/val/mineral/*
+smartmine/ai-model/data/val/rock/*
+smartmine/ai-model/data/val/ore/*
+# Keep .gitkeep placeholder files
+!smartmine/ai-model/data/train/mineral/.gitkeep
+!smartmine/ai-model/data/train/rock/.gitkeep
+!smartmine/ai-model/data/train/ore/.gitkeep
+!smartmine/ai-model/data/val/mineral/.gitkeep
+!smartmine/ai-model/data/val/rock/.gitkeep
+!smartmine/ai-model/data/val/ore/.gitkeep
